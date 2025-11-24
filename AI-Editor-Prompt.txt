@@ -1,0 +1,320 @@
+PROMPT FOR AI EDITOR: BUILD HVAC AFTER-HOURS CALL TRIAGE SYSTEM
+
+================================
+PROJECT OVERVIEW
+================================
+
+Build a production-ready AI call triage system for HVAC businesses that:
+- Answers after-hours emergency calls automatically
+- Extracts customer information (name, address, phone, issue)
+- Assesses urgency level (emergency vs. standard request)
+- Dispatches to on-call technicians via SMS
+- Logs all calls in a dashboard
+- Integrates with common HVAC software (ServiceTitan, Housecall Pro, Jobber)
+
+This is an MVP for an agency model serving 5-10 HVAC businesses initially. We need it functional and reliable, not perfect.
+
+================================
+TECH STACK REQUIREMENTS
+================================
+
+Backend:
+- Python + FastAPI (or Node.js + Express if you prefer)
+- PostgreSQL database
+- Redis for caching/queuing
+- Twilio for phone calls and SMS
+
+AI/Voice:
+- OpenAI Realtime API for voice conversations (or Deepgram + OpenAI GPT-4)
+- OR ElevenLabs + OpenAI for more natural voice
+- Function calling for structured data extraction
+
+Frontend:
+- Next.js + React for dashboard
+- Tailwind CSS for styling
+- Shadcn/ui for components
+- Real-time updates with WebSockets or Server-Sent Events
+
+Hosting:
+- Backend: Railway or Render
+- Database: Neon or Supabase
+- Frontend: Vercel
+
+================================
+CORE FEATURES (MVP)
+================================
+
+1. CALL HANDLING
+   - Receive incoming call via Twilio
+   - AI greets caller: "Thank you for calling [COMPANY NAME]. I'm here to help with your emergency. What's happening?"
+   - Conversational AI extracts:
+     * Customer name
+     * Address
+     * Phone number
+     * Issue description
+     * Urgency indicators (temperature, vulnerable people, safety concerns)
+   - AI confirms information back to customer
+   - Provides expected response time
+
+2. TRIAGE & ROUTING
+   - Classify urgency: Emergency (Priority 1), Urgent (Priority 2), Standard (Priority 3)
+   - Emergency triggers: "no heat" + cold weather, "gas leak", "no AC" + heat wave + vulnerable people
+   - Route to appropriate on-call tech based on:
+     * Priority level
+     * Time of day
+     * Tech availability/rotation
+   - Fallback escalation if primary tech doesn't respond in X minutes
+
+3. TECH NOTIFICATIONS
+   - SMS to on-call tech with:
+     * Priority badge
+     * Customer name, phone, address
+     * Issue summary
+     * Special notes (elderly, children, safety concern)
+     * Link to dashboard for full details
+   - Tech can accept/reject via SMS reply
+   - If rejected, route to backup tech
+
+4. DASHBOARD
+   - Login for HVAC business owners
+   - Real-time call feed
+   - Call recordings + transcripts
+   - Analytics: call volume by time, emergency vs. standard, response times
+   - Tech roster management
+   - After-hours schedule configuration
+   - Integration settings (API keys for ServiceTitan, etc.)
+
+5. INTEGRATIONS (PHASE 2 - NOT MVP)
+   - ServiceTitan API
+   - Housecall Pro API
+   - Jobber API
+   - Auto-create service tickets from calls
+
+================================
+DATABASE SCHEMA
+================================
+
+Companies:
+- id, name, phone_number, greeting_script, timezone, created_at
+
+Technicians:
+- id, company_id, name, phone_number, email, priority_order, is_active
+
+On_Call_Schedule:
+- id, company_id, tech_id, day_of_week, start_time, end_time
+
+Calls:
+- id, company_id, customer_name, customer_phone, customer_address, issue_description
+- priority_level (1-3), status (received, dispatched, accepted, completed)
+- assigned_tech_id, recording_url, transcript, created_at, dispatched_at
+
+Call_Logs:
+- id, call_id, event_type (received, ai_processing, dispatched, accepted, etc.)
+- details, timestamp
+
+================================
+USER FLOWS
+================================
+
+FLOW 1: INCOMING CALL
+1. Customer calls after-hours number
+2. Twilio receives call, webhooks to our backend
+3. Backend initiates AI voice conversation
+4. AI gathers information conversationally
+5. AI extracts structured data via function calling
+6. Backend saves call to database
+7. Backend triggers triage logic
+8. Backend sends SMS to on-call tech
+9. Backend updates dashboard in real-time
+
+FLOW 2: TECH RESPONSE
+1. Tech receives SMS notification
+2. Tech replies "ACCEPT" or views dashboard
+3. Backend updates call status
+4. Backend sends confirmation SMS to tech with customer's number
+5. (Optional) Send SMS to customer: "Your tech [NAME] will call you shortly"
+
+FLOW 3: BUSINESS OWNER DASHBOARD
+1. Owner logs in to dashboard
+2. Sees list of all calls (today, this week, this month)
+3. Can filter by priority, status, tech
+4. Can listen to call recordings
+5. Can view analytics/reports
+6. Can manage tech roster and schedules
+
+================================
+KEY TECHNICAL DECISIONS
+================================
+
+VOICE CONVERSATION OPTIONS:
+
+Option A: OpenAI Realtime API (RECOMMENDED)
+- Pros: Native voice-to-voice, low latency, built-in function calling
+- Cons: Newer API, less proven at scale
+- Use if: You want fastest development and best UX
+
+Option B: Deepgram STT + OpenAI GPT-4 + ElevenLabs TTS
+- Pros: More control, proven at scale
+- Cons: More complex to build, slightly higher latency
+- Use if: You need maximum control and reliability
+
+For MVP, use Option A unless you have specific concerns.
+
+FUNCTION CALLING SCHEMA:
+{
+  "name": "extract_call_info",
+  "description": "Extract customer information from emergency call",
+  "parameters": {
+    "customer_name": "string",
+    "customer_phone": "string",
+    "customer_address": "string",
+    "issue_description": "string",
+    "urgency_indicators": ["no_heat", "no_ac", "gas_leak", "water_damage", "vulnerable_people"],
+    "temperature_info": "string (optional)",
+    "additional_notes": "string (optional)"
+  }
+}
+
+================================
+MVP DEVELOPMENT PHASES
+================================
+
+PHASE 1: CORE CALL HANDLING (WEEK 1-2)
+- Set up Twilio phone number
+- Build voice AI conversation flow
+- Extract and store call data
+- Basic SMS notifications to tech
+
+PHASE 2: DASHBOARD & AUTH (WEEK 2-3)
+- User authentication
+- Call list and detail views
+- Call recordings/transcripts
+- Basic analytics
+
+PHASE 3: SCHEDULING & ROUTING (WEEK 3-4)
+- Tech roster management
+- On-call schedule configuration
+- Smart routing logic
+- Fallback escalation
+
+PHASE 4: POLISH & TESTING (WEEK 4-5)
+- Error handling
+- Edge case testing
+- Performance optimization
+- Documentation
+
+================================
+EXAMPLE AI CONVERSATION SCRIPT
+================================
+
+AI: "Thank you for calling ABC Heating and Cooling. I'm here to help with your emergency. What's happening?"
+
+Customer: "Yeah, our furnace just stopped working and it's freezing."
+
+AI: "I understand, that's definitely urgent. What's the temperature like outside right now?"
+
+Customer: "It's about 40 degrees and dropping."
+
+AI: "Got it. Is anyone vulnerable in the home - children, elderly, or anyone with health concerns?"
+
+Customer: "We have two young kids, yeah."
+
+AI: "Okay, I want to make sure we get someone out to you quickly. Can I get your name?"
+
+Customer: "Sarah Mitchell."
+
+AI: "Thank you, Sarah. And what's the best phone number to reach you?"
+
+Customer: "555-0123."
+
+AI: "Perfect. And what's your address?"
+
+Customer: "847 Oak Street."
+
+AI: "Thank you. So just to confirm - you're Sarah Mitchell at 847 Oak Street, phone number 555-0123. Your furnace has stopped working, it's 40 degrees outside, and you have two young children in the home. Is that all correct?"
+
+Customer: "Yes, that's right."
+
+AI: "Excellent. I'm dispatching this to our on-call technician right now as a priority emergency. They'll be calling you within the next few minutes. In the meantime, if you have any space heaters or can close off unused rooms, that will help. Is there anything else you need?"
+
+Customer: "No, that's it. Thank you."
+
+AI: "You're very welcome, Sarah. Help is on the way. Stay warm."
+
+================================
+CRITICAL SUCCESS FACTORS
+================================
+
+1. RELIABILITY: Calls must NEVER be dropped. Build in failsafes.
+2. LATENCY: AI responses should feel natural (< 1 second)
+3. ACCURACY: Must correctly extract name, phone, address 95%+ of the time
+4. CLARITY: AI voice must be clear and professional
+5. ESCALATION: Always have a fallback if AI fails (transfer to owner)
+
+================================
+TESTING REQUIREMENTS
+================================
+
+Before launch:
+- Test 50+ realistic call scenarios
+- Test edge cases: background noise, accents, unclear speech
+- Test failover scenarios: tech doesn't respond, database down, etc.
+- Load test: 10 concurrent calls
+- Test SMS delivery reliability
+
+================================
+WHAT TO BUILD FIRST
+================================
+
+Day 1-2: Get a basic phone call working with AI
+Day 3-4: Extract structured data and save to database
+Day 5-7: SMS notifications working
+Day 8-10: Basic dashboard showing call list
+Day 11-14: Add call recordings, transcripts, and analytics
+Day 15-20: Build scheduling system and smart routing
+Day 21-25: Polish, test, deploy
+
+================================
+STARTER PROMPT
+================================
+
+"I need you to build an AI-powered call triage system for HVAC businesses. Start by setting up:
+
+1. A FastAPI backend with PostgreSQL database
+2. Twilio integration for receiving calls
+3. OpenAI Realtime API for voice conversations
+4. Basic SMS notifications via Twilio
+
+Let's begin with the backend architecture. Create:
+- Project structure with clean separation of concerns
+- Database models for Companies, Technicians, Calls, and Call_Logs
+- API endpoints for: /webhook/incoming-call, /calls (CRUD), /techs (CRUD)
+- Twilio webhook handler that initiates an AI voice conversation
+- Function calling schema for extracting customer info
+
+Keep it simple and production-ready. Focus on reliability over features. Show me the project structure and key files first, then we'll implement piece by piece."
+
+================================
+BUDGET CONSIDERATIONS
+================================
+
+Monthly costs for 10 HVAC businesses (~100 calls/month each):
+
+- Twilio (calls + SMS): ~$200-300/month
+- OpenAI API: ~$100-200/month
+- Hosting (Railway/Render): ~$50-100/month
+- Database (Neon/Supabase): ~$25-50/month
+
+Total: ~$375-650/month for infrastructure
+Revenue: $2,990-4,990/month (10 customers @ $299-499)
+Margin: ~80-85%
+
+================================
+GO BUILD IT
+================================
+
+Use this prompt with Claude Code, Cursor, or any AI editor to start building. Focus on getting the core call handling working first, then layer on features.
+
+The demo system you already have will generate leads. This is what you'll deliver to convert those leads into paying customers.
+
+Start simple. Ship fast. Iterate based on real customer feedback.
