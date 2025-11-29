@@ -19,7 +19,31 @@ twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
 class SMSHandler:
     """Handles SMS notifications and escalation logic"""
-    
+
+    @staticmethod
+    def send_sms(to_phone: str, message: str) -> bool:
+        """
+        Send a generic SMS message
+
+        Args:
+            to_phone: Phone number to send to
+            message: Message body
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            sms = twilio_client.messages.create(
+                body=message,
+                from_=TWILIO_PHONE_NUMBER,
+                to=to_phone
+            )
+            print(f"SMS sent to {to_phone}: {sms.sid}")
+            return True
+        except Exception as e:
+            print(f"Error sending SMS to {to_phone}: {e}")
+            return False
+
     @staticmethod
     def send_emergency_alert(
         call_id: str,

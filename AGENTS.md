@@ -27,7 +27,7 @@ The primary receptionist for the HVAC business. Handles all incoming calls, qual
 - `escalate_emergency`: Trigger urgent notifications for on-call techs.
 
 **Configuration (Vapi/n8n):**
-- **System Prompt:** Located in `n8n/VAPI_CONFIG_GUIDE.md` (or similar).
+- **System Prompt:** Located in `n8n/FINAL/VAPI_ASSISTANT_FULL_CONFIG.json`.
 - **First Message:** "Thank you for calling [Company Name], this is [Agent Name]. How can I help you today?"
 - **Silence Timeout:** ~1-2 seconds for natural turn-taking.
 

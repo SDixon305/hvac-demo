@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import asyncio
+import os
 from datetime import datetime, date
 
 from database import db, Business, Technician, Call
@@ -688,10 +689,38 @@ async def vapi_tool_handler(request: Request):
     """
     Unified endpoint for all VAPI tool calls (DEMO MODE)
     Returns dummy data instantly for demonstration purposes
+    SMS goes to the owner_phone from the active demo_session
     """
     try:
         data = await request.json()
         print(f"VAPI Tool Call: {data}")
+
+        # Get the demo phone from active demo_session
+        from config import SUPABASE_URL, SUPABASE_KEY
+        import httpx
+
+        demo_phone = None
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{SUPABASE_URL}/rest/v1/demo_sessions",
+                    headers={
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": f"Bearer {SUPABASE_KEY}"
+                    },
+                    params={
+                        "is_active": "eq.true",
+                        "select": "owner_phone,business_name",
+                        "limit": "1"
+                    }
+                )
+                if response.status_code == 200:
+                    sessions = response.json()
+                    if sessions:
+                        demo_phone = sessions[0].get('owner_phone')
+                        print(f"📱 Demo phone from session: {demo_phone}")
+        except Exception as e:
+            print(f"⚠️ Could not fetch demo_session: {e}")
 
         # Extract the message/function call info
         message = data.get('message', {})
@@ -722,21 +751,20 @@ async def vapi_tool_handler(request: Request):
             customer_address = parameters.get('customer_address', '123 Main Street, Miami FL')
             confirmation_number = "HVAC-" + str(hash(emergency_type))[-6:]
 
-            # Get the caller's phone number from VAPI data
-            call_info = data.get('call', {})
-            customer_phone = call_info.get('customer', {}).get('number', data.get('message', {}).get('call', {}).get('customer', {}).get('number'))
-
-            # Send SMS to customer (the demo user gets BOTH messages)
-            if customer_phone:
+            # Use demo_phone from session (both customer and tech SMS go to demo user)
+            sms_target = demo_phone
+            if sms_target:
                 from sms_handler import SMSHandler
 
                 # Customer confirmation
                 customer_msg = f"🚨 EMERGENCY SERVICE DISPATCHED\n\nTechnician: Mike Rodriguez\nETA: 45 minutes\nAddress: {customer_address}\nConfirmation: {confirmation_number}\n\nMike will call when he's 10 minutes away."
-                SMSHandler.send_sms(customer_phone, customer_msg)
+                SMSHandler.send_sms(sms_target, customer_msg)
 
                 # Technician alert (demo user sees what technician receives)
-                tech_msg = f"🚨 EMERGENCY DISPATCH - {emergency_type.upper()}\n\nCustomer Address: {customer_address}\nPhone: {customer_phone}\nETA Required: 45 min\nConfirmation: {confirmation_number}\n\nReply 'ACCEPT' to confirm or 'BUSY' if unavailable."
-                SMSHandler.send_sms(customer_phone, tech_msg)
+                tech_msg = f"🚨 EMERGENCY DISPATCH - {emergency_type.upper()}\n\nCustomer Address: {customer_address}\nETA Required: 45 min\nConfirmation: {confirmation_number}\n\nReply 'ACCEPT' to confirm or 'BUSY' if unavailable."
+                SMSHandler.send_sms(sms_target, tech_msg)
+            else:
+                print("⚠️ No demo_phone configured - SMS not sent")
 
             return {
                 "results": [{
@@ -754,21 +782,20 @@ async def vapi_tool_handler(request: Request):
             phone_number = parameters.get('phone_number', '')
             confirmation_number = "APT-" + str(hash(customer_name))[-6:]
 
-            # Get caller phone from VAPI
-            call_info = data.get('call', {})
-            customer_phone = call_info.get('customer', {}).get('number', data.get('message', {}).get('call', {}).get('customer', {}).get('number'))
-
-            # Send SMS confirmations
-            if customer_phone:
+            # Use demo_phone from session (both customer and tech SMS go to demo user)
+            sms_target = demo_phone
+            if sms_target:
                 from sms_handler import SMSHandler
 
                 # Customer confirmation
                 customer_msg = f"📅 APPOINTMENT CONFIRMED\n\n{service_type}\nTomorrow at 2:00 PM\nTechnician: Mike Rodriguez\nConfirmation: {confirmation_number}\n\nWe'll text you 30 minutes before arrival."
-                SMSHandler.send_sms(customer_phone, customer_msg)
+                SMSHandler.send_sms(sms_target, customer_msg)
 
                 # Technician assignment (demo user sees what tech gets)
-                tech_msg = f"📅 NEW APPOINTMENT - {service_type.upper()}\n\nTomorrow 2:00 PM\nCustomer: {customer_name}\nPhone: {phone_number or customer_phone}\nConfirmation: {confirmation_number}\n\nReview job details in portal."
-                SMSHandler.send_sms(customer_phone, tech_msg)
+                tech_msg = f"📅 NEW APPOINTMENT - {service_type.upper()}\n\nTomorrow 2:00 PM\nCustomer: {customer_name}\nPhone: {phone_number or sms_target}\nConfirmation: {confirmation_number}\n\nReview job details in portal."
+                SMSHandler.send_sms(sms_target, tech_msg)
+            else:
+                print("⚠️ No demo_phone configured - SMS not sent")
 
             return {
                 "results": [{
@@ -802,78 +829,62 @@ async def vapi_tool_handler(request: Request):
 @app.post("/api/update-vapi-greeting")
 async def update_vapi_greeting(request: Request):
     """
-    Update VAPI assistant's greeting and system prompt with the new business name
-    Called from frontend when user configures their business
+    Update VAPI assistant using the config template file.
+    Reads VAPI_ASSISTANT_FULL_CONFIG.json and replaces {{BUSINESS_NAME}} placeholders.
+    Called from frontend when user configures their business.
     """
     try:
         from config import VAPI_API_KEY, VAPI_ASSISTANT_ID
         import httpx
+        import json
+        import re
 
         data = await request.json()
-        business_name = data.get('business_name', 'our company')
+        business_name = data.get('business_name', 'HVAC Company')
 
-        print(f"📝 Updating VAPI assistant greeting with business name: {business_name}")
+        print(f"📝 Updating VAPI assistant with business name: {business_name}")
 
-        async with httpx.AsyncClient() as client:
+        # Read the config template file
+        config_path = os.path.join(os.path.dirname(__file__), '..', 'n8n', 'FINAL', 'VAPI_ASSISTANT_FULL_CONFIG.json')
+
+        try:
+            with open(config_path, 'r') as f:
+                config_template = f.read()
+            print(f"✓ Loaded config template from {config_path}")
+        except FileNotFoundError:
+            print(f"⚠️ Config template not found at {config_path}, using inline config")
+            # Fallback to inline config if file not found
+            config_template = json.dumps({
+                "name": "{{BUSINESS_NAME}} Demo Agent",
+                "firstMessage": "Thank you for calling {{BUSINESS_NAME}}, how may I help you?",
+                "endCallMessage": "Thank you for calling {{BUSINESS_NAME}}. Have a great day!",
+                "model": {
+                    "provider": "openai",
+                    "model": "gpt-4",
+                    "temperature": 0.7,
+                    "systemPrompt": "You are the after-hours dispatcher for {{BUSINESS_NAME}}. Your job is to help customers with HVAC emergencies or schedule appointments."
+                }
+            })
+
+        # Replace all {{BUSINESS_NAME}} placeholders
+        config_str = config_template.replace('{{BUSINESS_NAME}}', business_name)
+        config = json.loads(config_str)
+
+        print(f"✓ Replaced placeholders with: {business_name}")
+        print(f"  - First Message: {config.get('firstMessage', 'N/A')}")
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.patch(
                 f"https://api.vapi.ai/assistant/{VAPI_ASSISTANT_ID}",
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {VAPI_API_KEY}"
                 },
-                json={
-                    "firstMessage": f"Thank you for calling {business_name}, how may I help you?",
-                    "model": {
-                        "provider": "openai",
-                        "model": "gpt-4",
-                        "temperature": 0.7,
-                        "systemPrompt": f"""You are a professional receptionist for {business_name}, an HVAC company.
-
-EXACT SCRIPT TO FOLLOW:
-
-When customer says they're an existing customer:
-1. You: "What's your first and last name?"
-2. Customer gives name (e.g., "Seth Dixon")
-3. You call lookup_customer tool
-4. After 2 seconds, you MUST say: "Perfect! I have you here at [ADDRESS from tool response]. Now, what's going on with your system?"
-
-CRITICAL RULES:
-- DO NOT say "let me look that up" or "one moment" or "hold on"
-- DO NOT announce you're using any tools
-- DO NOT go silent after calling lookup_customer
-- DO NOT ask customer to confirm their address
-- After receiving lookup_customer response, count to 2 in your head, then IMMEDIATELY speak the address
-- You must TELL them their address, not ASK them
-
-EXAMPLE OF CORRECT FLOW:
-Customer: "I'm an existing customer"
-You: "Great! What's your first and last name?"
-Customer: "John Smith"
-You: [call lookup_customer] "Perfect! I have you here at 456 Ocean Drive in West Palm Beach. Now, what's going on with your AC?"
-
-EXAMPLE OF WRONG FLOW (DO NOT DO THIS):
-Customer: "I'm an existing customer"
-You: "What's your name?"
-Customer: "John Smith"
-You: "Let me look that up" [WRONG - never say this]
-You: "Using lookup tool" [WRONG - never say this]
-You: [silence] [WRONG - never go silent]
-You: "Can you confirm your address?" [WRONG - you tell them, don't ask]
-
-EMERGENCY DETECTION:
-If customer mentions: heat wave, elderly person, extreme heat, health risk, emergency, urgent - treat as emergency.
-
-For emergencies: After getting address, say "That sounds urgent. I'm dispatching a technician right now." Then call check_technician_availability and give them technician name, ETA, and confirmation number.
-
-For routine service: Call book_appointment and confirm the appointment details.
-
-TONE: Professional, confident, efficient. Act like you have all their information instantly available."""
-                    }
-                }
+                json=config
             )
 
             if response.status_code == 200:
-                print(f"✅ Successfully updated VAPI assistant with greeting: '{business_name}, how may I help you?'")
+                print(f"✅ Successfully updated VAPI assistant for '{business_name}'")
                 return {"success": True, "business_name": business_name}
             else:
                 print(f"❌ Failed to update VAPI assistant: {response.status_code} - {response.text}")
@@ -881,6 +892,8 @@ TONE: Professional, confident, efficient. Act like you have all their informatio
 
     except Exception as e:
         print(f"❌ Error updating VAPI greeting: {e}")
+        import traceback
+        traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 

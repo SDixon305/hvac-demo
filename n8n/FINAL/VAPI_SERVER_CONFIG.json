@@ -1,6 +1,0 @@
-{
-    "server": {
-        "url": "https://hvac-demo-seth.loca.lt/webhook/vapi-config",
-        "timeoutSeconds": 20
-    }
-}

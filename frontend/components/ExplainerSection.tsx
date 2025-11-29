@@ -1,10 +1,10 @@
 'use client'
 
-import { Phone, Zap, Clock, ShieldCheck, ArrowRight, TrendingUp, AlertCircle } from 'lucide-react'
+import { Phone, Bot, ArrowRight, Truck } from 'lucide-react'
 
 export default function ExplainerSection() {
     return (
-        <section className="relative overflow-hidden bg-slate-950 text-white py-12 lg:py-16">
+        <section className="relative overflow-hidden bg-slate-950 text-white pt-32 pb-12 lg:pt-40 lg:pb-16">
             {/* Background Effects */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl pointer-events-none">
                 <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl mix-blend-screen animate-pulse" style={{ animationDuration: '4s' }} />
@@ -23,91 +23,54 @@ export default function ExplainerSection() {
                     </div>
 
                     <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-400">
-                        Your Phone is Ringing.<br />
-                        <span className="text-white">Are You Making Money?</span>
+                        Never Miss a Call.<br />
+                        <span className="text-white">Never Lose a Job.</span>
                     </h1>
 
                     <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-                        The AI Dispatcher that never sleeps, never calls in sick, and turns 2 AM emergencies into booked jobs while you rest.
+                        AI-powered dispatching that answers every call, identifies emergencies for immediate dispatch, and schedules routine service—24/7, without hiring another person.
                     </p>
                 </div>
 
-                {/* The "Old Way" vs "New Way" Cards */}
-                <div className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-                    {/* The Pain (Old Way) */}
-                    <div className="group relative bg-slate-900/50 rounded-2xl p-6 border border-red-900/30 hover:border-red-500/30 transition-colors duration-500">
-                        <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-                        <div className="relative">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500">
-                                    <AlertCircle className="w-5 h-5" />
-                                </div>
-                                <h3 className="text-xl font-bold text-red-100">The "Voicemail Graveyard"</h3>
-                            </div>
-
-                            <ul className="space-y-3">
-                                <li className="flex items-start gap-2 text-slate-400 text-sm">
-                                    <span className="text-red-500/50 mt-0.5">✕</span>
-                                    <span>65% of callers hang up on voicemail</span>
-                                </li>
-                                <li className="flex items-start gap-2 text-slate-400 text-sm">
-                                    <span className="text-red-500/50 mt-0.5">✕</span>
-                                    <span>$16,000+ lost monthly revenue</span>
-                                </li>
-                                <li className="flex items-start gap-2 text-slate-400 text-sm">
-                                    <span className="text-red-500/50 mt-0.5">✕</span>
-                                    <span>Waking up at 3 AM for non-emergencies</span>
-                                </li>
-                                <li className="flex items-start gap-2 text-slate-400 text-sm">
-                                    <span className="text-red-500/50 mt-0.5">✕</span>
-                                    <span>Inconsistent customer experience</span>
-                                </li>
-                            </ul>
+                {/* How It Works - 3 Step Flow */}
+                <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6 max-w-4xl mx-auto">
+                    {/* Step 1 */}
+                    <div className="flex items-center gap-3 bg-slate-900/50 rounded-2xl px-6 py-4 border border-slate-700/50">
+                        <div className="p-3 rounded-xl bg-blue-500 text-white shadow-lg shadow-blue-500/30">
+                            <Phone className="w-5 h-5" />
                         </div>
+                        <span className="text-lg font-semibold text-white">Customer calls</span>
                     </div>
 
-                    {/* The Solution (New Way) */}
-                    <div className="group relative bg-slate-900/80 rounded-2xl p-6 border border-blue-500/30 hover:border-blue-400/50 transition-all duration-500 shadow-2xl shadow-blue-900/20">
-                        <div className="absolute inset-0 bg-gradient-to-b from-blue-500/10 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    {/* Arrow */}
+                    <ArrowRight className="w-6 h-6 text-slate-600 hidden md:block" />
+                    <div className="h-6 w-px bg-slate-700 md:hidden" />
 
-                        <div className="relative">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2 rounded-xl bg-blue-500 text-white shadow-lg shadow-blue-500/30">
-                                    <Zap className="w-5 h-5" />
-                                </div>
-                                <h3 className="text-xl font-bold text-white">The AI Advantage</h3>
-                            </div>
-
-                            <ul className="space-y-3">
-                                <li className="flex items-start gap-2 text-blue-100 text-sm">
-                                    <div className="p-0.5 rounded-full bg-blue-500/20 text-blue-400 mt-0.5">
-                                        <Phone className="w-3 h-3" />
-                                    </div>
-                                    <span className="font-medium">Answers instantly, 24/7/365</span>
-                                </li>
-                                <li className="flex items-start gap-2 text-blue-100 text-sm">
-                                    <div className="p-0.5 rounded-full bg-blue-500/20 text-blue-400 mt-0.5">
-                                        <TrendingUp className="w-3 h-3" />
-                                    </div>
-                                    <span className="font-medium">95% Capture Rate (No more missed jobs)</span>
-                                </li>
-                                <li className="flex items-start gap-2 text-blue-100 text-sm">
-                                    <div className="p-0.5 rounded-full bg-blue-500/20 text-blue-400 mt-0.5">
-                                        <ShieldCheck className="w-3 h-3" />
-                                    </div>
-                                    <span className="font-medium">$0 Overhead Increase (Infinite scaling)</span>
-                                </li>
-                                <li className="flex items-start gap-2 text-blue-100 text-sm">
-                                    <div className="p-0.5 rounded-full bg-blue-500/20 text-blue-400 mt-0.5">
-                                        <Clock className="w-3 h-3" />
-                                    </div>
-                                    <span className="font-medium">Dispatches techs in under 60 seconds</span>
-                                </li>
-                            </ul>
+                    {/* Step 2 */}
+                    <div className="flex items-center gap-3 bg-slate-900/50 rounded-2xl px-6 py-4 border border-slate-700/50">
+                        <div className="p-3 rounded-xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/30">
+                            <Bot className="w-5 h-5" />
                         </div>
+                        <span className="text-lg font-semibold text-white">AI triages & books</span>
+                    </div>
+
+                    {/* Arrow */}
+                    <ArrowRight className="w-6 h-6 text-slate-600 hidden md:block" />
+                    <div className="h-6 w-px bg-slate-700 md:hidden" />
+
+                    {/* Step 3 */}
+                    <div className="flex items-center gap-3 bg-slate-900/50 rounded-2xl px-6 py-4 border border-slate-700/50">
+                        <div className="p-3 rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-500/30">
+                            <Truck className="w-5 h-5" />
+                        </div>
+                        <span className="text-lg font-semibold text-white">Tech gets dispatched</span>
                     </div>
                 </div>
+
+                {/* Subtext */}
+                <p className="text-center text-slate-400 mt-8 text-lg">
+                    Emergencies get dispatched immediately. Routine calls get scheduled. You stay in control.
+                </p>
             </div>
         </section>
     )

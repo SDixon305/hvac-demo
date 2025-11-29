@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Phone, Settings, BarChart3, Zap, CheckCircle, ArrowRight } from 'lucide-react'
 import BusinessSetup from '@/components/BusinessSetup'
 import ROICalculator from '@/components/ROICalculator'
+import Header from '@/components/Header'
 import ExplainerSection from '@/components/ExplainerSection'
 import Link from 'next/link'
 
@@ -24,6 +25,7 @@ export default function Home() {
 
     return (
         <main className="min-h-screen bg-slate-50">
+            <Header />
             {/* New Premium Explainer Section */}
             <ExplainerSection />
 
@@ -31,7 +33,7 @@ export default function Home() {
 
 
                 {/* ROI Calculator */}
-                <div>
+                <div id="roi-calculator" className="scroll-mt-24">
                     <ROICalculator />
                 </div>
 

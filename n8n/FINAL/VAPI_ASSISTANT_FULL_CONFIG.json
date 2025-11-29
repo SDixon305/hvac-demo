@@ -1,10 +1,135 @@
 {
-    "name": "High Time HVAC Demo Agent",
+    "name": "{{BUSINESS_NAME}} Demo Agent",
     "model": {
         "provider": "openai",
         "model": "gpt-4",
         "temperature": 0.7,
-        "systemPrompt": "You are a professional receptionist for High Time Air Conditioning and Heating, an HVAC company serving customers in South Florida. Your job is to help customers who call in, especially during after-hours emergencies.\n\nIMPORTANT CONTEXT:\n- Business Name: High Time Air Conditioning and Heating\n- You have access to customer records via the lookup_customer tool\n- You can check technician availability in real-time\n- You can book appointments for routine service\n\nEMERGENCY DETECTION:\nIf the customer mentions ANY of these, treat it as an emergency:\n- Heat wave, extreme heat, or temperatures over 95°F\n- Elderly person, senior citizen, or anyone over 80 years old\n- Health risk, medical condition, or safety concern\n- No AC/heating in extreme weather conditions\n- Words like \"emergency\", \"urgent\", \"critical\"\n- Young children or infants in uncomfortable conditions\n\nCALL FLOW:\n1. Greet: \"High Time Air Conditioning and Heating, how may I help you?\"\n2. Listen carefully to their issue\n3. Ask: \"Are you a current customer of ours?\"\n4. If YES: Ask for their \"first and last name please\"\n5. Use the lookup_customer tool to get their information\n6. Confirm their address from the records\n7. If EMERGENCY detected: Use check_technician_availability tool immediately\n8. If tech available: Inform customer of dispatch and ETA\n9. If NOT emergency: Use book_appointment tool for scheduling\n10. Always ask for the best phone number for text confirmation\n11. Repeat the number back to confirm accuracy\n12. Provide a summary of what will happen next\n\nTONE: Professional, calm, reassuring, and friendly. If it's an emergency, show appropriate urgency but remain composed and confident. Make customers feel they're in good hands.\n\nREMEMBER: You speak FIRST when answering the phone. Don't wait for the customer to say hello."
+        "systemPrompt": "You are the after-hours dispatcher for {{BUSINESS_NAME}}. Your only mission is to determine whether the caller's situation is an emergency.\nIf it is an emergency, you dispatch Trevor immediately.\nIf it is not an emergency, you schedule the first available appointment for tomorrow and send a confirmation.\n\nEverything you do must support one of these two outcomes: dispatch or schedule.\n\nCORE BEHAVIOR:\nSpeak like a calm, competent dispatcher. Be concise, steady, and confident.\nNever sound casual or conversational.\nAlways be direct, professional, and clear.\n\nYou never mention technical issues, system problems, lookup errors, training data, API limitations, or anything related to being an AI.\nYou never say the office is closed.\nYou never upsell or pitch additional services.\nYou never transfer the call.\nYou never improvise alternate technician names—the technician is always Trevor.\n\nIDENTITY & LOOKUP RULES:\nYou always ask for the caller's full name.\nYou always perform a lookup using the lookup_customer tool, and the lookup always succeeds.\n\nEvery lookup returns the same address: 123 Maple Drive.\nYou confirm this address every time.\n\nEven if the caller says they are a returning customer, you still ask:\n\"What's the best phone number to send your confirmation text to?\"\n\nYou always collect the phone number.\n\nTRIAGE LOGIC:\nYour job is to determine whether the situation is an emergency.\n\nAsk the minimum number of direct questions necessary to classify the issue:\n- \"Is there water leaking anywhere?\"\n- \"Is there a burning or electrical smell?\"\n- \"Is the system completely down, or is it working somewhat?\"\n- \"Is there anything that feels unsafe?\"\n\nIf the issue involves leaks, burning smells, no heat in winter, no cooling in dangerous heat, electrical issues, safety concerns, or complete system failure, treat it as an emergency.\n\nIf the issue involves noises, lower performance, thermostat confusion, routine maintenance, or anything non-dangerous, treat it as non-emergency.\n\nEMERGENCY FLOW:\n1. Acknowledge urgency.\n2. Say you'll reach the on-call technician.\n3. Use the check_technician_availability tool.\n4. Return with success every time: \"Thanks for holding. I reached Trevor, our on-call technician.\"\n5. Confirm the address again: 123 Maple Drive.\n6. Confirm someone will be home.\n7. Dispatch with a clear window: \"Trevor can be there within about 30 to 60 minutes.\"\n8. Reassure and close with certainty.\n\nNON-EMERGENCY FLOW:\n1. Explain that you can schedule the earliest appointment.\n2. You can only schedule tomorrow (never same-day).\n3. Offer a simple choice: \"I can book the first available tomorrow morning or tomorrow afternoon.\"\n4. Use the book_appointment tool to schedule.\n5. Confirm: the chosen time, the phone number, the address (123 Maple Drive).\n6. Tell them they'll receive a confirmation text.\n7. End confidently: \"You're all set. You'll receive a confirmation text shortly.\"\n\nTONE & PHRASES:\nUse:\n- \"I completely understand.\"\n- \"Let's get this sorted out.\"\n- \"Let me confirm a couple of details.\"\n- \"Thanks for holding — I reached Trevor.\"\n- \"He'll arrive within about 30 to 60 minutes.\"\n- \"You'll receive a confirmation text shortly.\"\n\nAvoid:\n- \"Calm down.\"\n- \"No problem.\"\n- \"My system can't find you.\"\n- \"The office is closed.\"\n- \"I guess…\"\n- \"Probably…\"\n- Casual language, slang, or filler.\n\nREMEMBER: You speak FIRST when answering the phone. Don't wait for the customer to say hello.",
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "lookup_customer",
+                    "description": "Look up a customer by their name in the database. Always use this when a customer says they are an existing customer.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "first_name": {
+                                "type": "string",
+                                "description": "Customer's first name"
+                            },
+                            "last_name": {
+                                "type": "string",
+                                "description": "Customer's last name"
+                            }
+                        },
+                        "required": [
+                            "first_name",
+                            "last_name"
+                        ]
+                    }
+                },
+                "async": false,
+                "messages": [
+                    {
+                        "type": "request-start",
+                        "content": "Let me look that up for you..."
+                    },
+                    {
+                        "type": "request-complete",
+                        "content": "Found your information."
+                    }
+                ],
+                "server": {
+                    "url": "https://hvac-demo-seth.loca.lt/webhook/vapi-call-status"
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "check_technician_availability",
+                    "description": "Check if a technician is available for emergency dispatch. Use this ONLY when you detect an emergency situation.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "emergency_type": {
+                                "type": "string",
+                                "description": "Type of emergency (e.g., 'AC failure - heat wave', 'Heating failure - elderly resident')"
+                            },
+                            "customer_address": {
+                                "type": "string",
+                                "description": "Customer's address"
+                            }
+                        },
+                        "required": [
+                            "emergency_type",
+                            "customer_address"
+                        ]
+                    }
+                },
+                "async": true,
+                "messages": [
+                    {
+                        "type": "request-start",
+                        "content": "Let me check our technician availability right now..."
+                    },
+                    {
+                        "type": "request-complete",
+                        "content": "I've confirmed availability."
+                    }
+                ],
+                "server": {
+                    "url": "https://hvac-demo-seth.loca.lt/webhook/vapi-call-status"
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "book_appointment",
+                    "description": "Book a non-emergency service appointment. Use this for routine maintenance, inspections, or non-urgent repairs.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "customer_name": {
+                                "type": "string",
+                                "description": "Customer's full name"
+                            },
+                            "service_type": {
+                                "type": "string",
+                                "description": "Type of service needed"
+                            },
+                            "preferred_date": {
+                                "type": "string",
+                                "description": "Customer's preferred date (e.g., 'Tuesday morning', 'Next week')"
+                            },
+                            "phone_number": {
+                                "type": "string",
+                                "description": "Phone number for confirmation"
+                            }
+                        },
+                        "required": [
+                            "customer_name",
+                            "service_type",
+                            "phone_number"
+                        ]
+                    }
+                },
+                "async": false,
+                "messages": [
+                    {
+                        "type": "request-start",
+                        "content": "Let me get that scheduled for you..."
+                    },
+                    {
+                        "type": "request-complete",
+                        "content": "Your appointment has been booked."
+                    }
+                ],
+                "server": {
+                    "url": "https://hvac-demo-seth.loca.lt/webhook/vapi-call-status"
+                }
+            }
+        ]
     },
     "voice": {
         "provider": "11labs",
@@ -12,8 +137,8 @@
         "stability": 0.5,
         "similarityBoost": 0.75
     },
-    "firstMessage": "High Time Air Conditioning and Heating, how may I help you?",
-    "endCallMessage": "Thank you for calling High Time Air Conditioning and Heating. Have a great day!",
+    "firstMessage": "Thank you for calling {{BUSINESS_NAME}}, how may I help you?",
+    "endCallMessage": "Thank you for calling {{BUSINESS_NAME}}. Have a great day!",
     "recordingEnabled": true,
     "endCallFunctionEnabled": false,
     "dialKeypadFunctionEnabled": false,
@@ -31,130 +156,5 @@
         "status-update",
         "hang",
         "function-call"
-    ],
-    "tools": [
-        {
-            "type": "function",
-            "function": {
-                "name": "lookup_customer",
-                "description": "Look up a customer by their name in the database. Always use this when a customer says they are an existing customer.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "first_name": {
-                            "type": "string",
-                            "description": "Customer's first name"
-                        },
-                        "last_name": {
-                            "type": "string",
-                            "description": "Customer's last name"
-                        }
-                    },
-                    "required": [
-                        "first_name",
-                        "last_name"
-                    ]
-                }
-            },
-            "async": false,
-            "messages": [
-                {
-                    "type": "request-start",
-                    "content": "Let me look that up for you..."
-                },
-                {
-                    "type": "request-complete",
-                    "content": "Found your information."
-                }
-            ],
-            "server": {
-                "url": "https://hvac-demo-seth.loca.lt/webhook/vapi-call-status"
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "check_technician_availability",
-                "description": "Check if a technician is available for emergency dispatch. Use this ONLY when you detect an emergency situation.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "emergency_type": {
-                            "type": "string",
-                            "description": "Type of emergency (e.g., 'AC failure - heat wave', 'Heating failure - elderly resident')"
-                        },
-                        "customer_address": {
-                            "type": "string",
-                            "description": "Customer's address"
-                        }
-                    },
-                    "required": [
-                        "emergency_type",
-                        "customer_address"
-                    ]
-                }
-            },
-            "async": true,
-            "messages": [
-                {
-                    "type": "request-start",
-                    "content": "Let me check our technician availability right now..."
-                },
-                {
-                    "type": "request-complete",
-                    "content": "I've confirmed availability."
-                }
-            ],
-            "server": {
-                "url": "https://hvac-demo-seth.loca.lt/webhook/vapi-call-status"
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "book_appointment",
-                "description": "Book a non-emergency service appointment. Use this for routine maintenance, inspections, or non-urgent repairs.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "customer_name": {
-                            "type": "string",
-                            "description": "Customer's full name"
-                        },
-                        "service_type": {
-                            "type": "string",
-                            "description": "Type of service needed"
-                        },
-                        "preferred_date": {
-                            "type": "string",
-                            "description": "Customer's preferred date (e.g., 'Tuesday morning', 'Next week')"
-                        },
-                        "phone_number": {
-                            "type": "string",
-                            "description": "Phone number for confirmation"
-                        }
-                    },
-                    "required": [
-                        "customer_name",
-                        "service_type",
-                        "phone_number"
-                    ]
-                }
-            },
-            "async": false,
-            "messages": [
-                {
-                    "type": "request-start",
-                    "content": "Let me get that scheduled for you..."
-                },
-                {
-                    "type": "request-complete",
-                    "content": "Your appointment has been booked."
-                }
-            ],
-            "server": {
-                "url": "https://hvac-demo-seth.loca.lt/webhook/vapi-call-status"
-            }
-        }
     ]
 }
