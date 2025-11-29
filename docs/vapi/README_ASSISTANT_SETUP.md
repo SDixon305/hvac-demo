@@ -58,13 +58,13 @@ The configuration still uses the example ngrok URL. You need to update it:
 
 Option A - Using the shell script (easiest):
 ```bash
-cd n8n/FINAL
+cd docs/vapi
 ./update_full_assistant.sh
 ```
 
 Option B - Direct node command:
 ```bash
-cd n8n/FINAL
+cd docs/vapi
 node update_full_assistant.js <YOUR_ASSISTANT_ID> <YOUR_API_KEY>
 ```
 

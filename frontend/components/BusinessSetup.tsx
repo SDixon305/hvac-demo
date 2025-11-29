@@ -54,8 +54,10 @@ export default function BusinessSetup({ data, onUpdate, onConfigured, onPhoneNum
             console.log('Inferred region:', region)
 
             // 3. Update VAPI assistant with new business name
+            // Use environment variable for backend URL, fallback to localhost for development
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
             try {
-                const vapiResponse = await fetch('https://hvac-demo-seth.loca.lt/api/update-vapi-greeting', {
+                const vapiResponse = await fetch(`${backendUrl}/api/update-vapi-greeting`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -66,11 +68,16 @@ export default function BusinessSetup({ data, onUpdate, onConfigured, onPhoneNum
                 })
 
                 if (!vapiResponse.ok) {
-                    console.warn('Failed to update VAPI assistant, but continuing...')
+                    const errorText = await vapiResponse.text()
+                    console.error('Failed to update VAPI assistant:', errorText)
+                    throw new Error(`VAPI update failed: ${errorText}`)
                 }
+
+                console.log('Successfully updated VAPI assistant with business name:', data.name)
             } catch (vapiError) {
-                console.warn('Error updating VAPI assistant:', vapiError)
-                // Continue anyway - this is not critical
+                console.error('Error updating VAPI assistant:', vapiError)
+                // This IS critical for the demo - alert the user
+                throw new Error('Failed to configure voice agent. Please try again.')
             }
 
             setIsConfigured(true)
@@ -178,7 +185,7 @@ export default function BusinessSetup({ data, onUpdate, onConfigured, onPhoneNum
                         name="ownerPhone"
                         value={data.ownerPhone}
                         onChange={handleChange}
-                        placeholder="e.g., +1 305-555-0100"
+                        placeholder="e.g., 305-555-0100"
                         className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                         required
                     />

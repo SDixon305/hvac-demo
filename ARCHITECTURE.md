@@ -60,14 +60,11 @@ This document is the **single source of truth** for understanding the HVAC Agent
 | `BusinessSetup.tsx` | Demo configuration form |
 | `Header.tsx` | Navigation header |
 
-### n8n Workflows - `/n8n/FINAL/`
-**Status: EXPERIMENTAL - Used for demos, not production**
-
-The n8n folder contains workflow automation that can be used alongside or instead of the FastAPI backend for demo purposes. The `FINAL/` subfolder is canonical.
+### VAPI Configuration - `/docs/vapi/`
+**Status: ACTIVE - Voice agent configuration**
 
 | File | Purpose |
 |------|---------|
-| `HVAC_Master_Workflow.json` | Complete n8n workflow |
 | `VAPI_ASSISTANT_FULL_CONFIG.json` | Vapi assistant configuration |
 | `VAPI_TOOLS.json` | Tool definitions for Vapi |
 | `TRAINING_NOTES.md` | Voice agent behavior training |
@@ -112,11 +109,10 @@ The system flags emergencies based on:
 
 ## Key Decisions
 
-### Why FastAPI over n8n for production?
+### Why FastAPI?
 - **Performance**: FastAPI handles high-frequency webhooks efficiently
 - **Flexibility**: Complex Python logic for AI analysis
 - **Reliability**: Battle-tested in production environments
-- **n8n role**: Used for demos and prototyping, may be integrated later
 
 ### Why Vapi over direct Twilio?
 - **Simplicity**: Vapi handles STT/TTS orchestration
@@ -124,7 +120,7 @@ The system flags emergencies based on:
 - **Tools**: Native function calling support
 - See `twilio_research.md` for alternatives analysis
 
-## File Structure (Post-Cleanup)
+## File Structure
 
 ```
 HVAC Agent Demo/
@@ -142,15 +138,12 @@ HVAC Agent Demo/
 │   ├── components/
 │   └── public/
 │
-├── n8n/                       # Workflow automation
-│   ├── FINAL/                 # Canonical configs
-│   │   ├── HVAC_Master_Workflow.json
-│   │   ├── VAPI_ASSISTANT_FULL_CONFIG.json
-│   │   ├── VAPI_TOOLS.json
-│   │   ├── TRAINING_NOTES.md
-│   │   └── update_full_assistant.js
-│   ├── CREDENTIALS_SETUP.md
-│   └── docker-compose.yml
+├── docs/                       # Documentation & config
+│   └── vapi/                   # VAPI assistant configuration
+│       ├── VAPI_ASSISTANT_FULL_CONFIG.json
+│       ├── VAPI_TOOLS.json
+│       ├── TRAINING_NOTES.md
+│       └── update_full_assistant.js
 │
 ├── ARCHITECTURE.md            # This file (source of truth)
 ├── README.md                  # Project overview
@@ -166,12 +159,12 @@ HVAC Agent Demo/
 
 ### To update the Vapi assistant:
 ```bash
-cd n8n/FINAL
+cd docs/vapi
 ./update-agent.sh
 ```
 
 ### To add training notes:
-1. Edit `n8n/FINAL/TRAINING_NOTES.md`
+1. Edit `docs/vapi/TRAINING_NOTES.md`
 2. Run `./update-agent.sh`
 
 ### To deploy changes:

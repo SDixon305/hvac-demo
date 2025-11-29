@@ -60,7 +60,7 @@ export default function DemoV2Page() {
 
             {/* Footer */}
             <footer className="relative z-10 p-6 text-center text-gray-600 text-xs">
-                HVAC AI Agent Demo • Powered by Vapi & n8n
+                HVAC AI Agent Demo • Powered by Vapi
             </footer>
         </main>
     );

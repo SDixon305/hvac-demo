@@ -26,8 +26,8 @@ The primary receptionist for the HVAC business. Handles all incoming calls, qual
 - `log_call_summary`: Save call notes to the CRM/Dashboard.
 - `escalate_emergency`: Trigger urgent notifications for on-call techs.
 
-**Configuration (Vapi/n8n):**
-- **System Prompt:** Located in `n8n/FINAL/VAPI_ASSISTANT_FULL_CONFIG.json`.
+**Configuration (Vapi):**
+- **System Prompt:** Located in `docs/vapi/VAPI_ASSISTANT_FULL_CONFIG.json`.
 - **First Message:** "Thank you for calling [Company Name], this is [Agent Name]. How can I help you today?"
 - **Silence Timeout:** ~1-2 seconds for natural turn-taking.
 
@@ -43,13 +43,13 @@ Follows up with customers to confirm appointments or conduct satisfaction survey
 - Gather feedback after a service visit.
 
 **Configuration:**
-- **Trigger:** Automated via n8n workflow after job completion.
+- **Trigger:** Automated via backend workflow after job completion.
 
 ---
 
 ## Agent Development Workflow
 
 1. **Define Prompt:** Update the system prompt in the Vapi dashboard.
-2. **Configure Tools:** Ensure n8n webhooks are active and tools are defined in Vapi.
+2. **Configure Tools:** Ensure webhooks are active and tools are defined in Vapi.
 3. **Test:** Use the "Demo Caller" interface to simulate scenarios.
 4. **Refine:** Adjust prompt based on call logs and edge cases.

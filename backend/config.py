@@ -24,7 +24,11 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # App Configuration
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+# App Configuration
+BACKEND_URL = os.getenv("BACKEND_URL", "https://hvac-demo-seth.loca.lt")
+if "localhost" in BACKEND_URL or "127.0.0.1" in BACKEND_URL:
+    BACKEND_URL = "https://hvac-demo-seth.loca.lt"
+    
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # Emergency Detection Configuration

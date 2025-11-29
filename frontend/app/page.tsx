@@ -15,9 +15,9 @@ export default function Home() {
     const [businessConfigured, setBusinessConfigured] = useState(false)
     const [demoPhoneNumber, setDemoPhoneNumber] = useState('+1 (844) 671-3994') // Real Vapi number
     const [businessData, setBusinessData] = useState({
-        name: "Bob's HVAC",
-        ownerName: 'Bob Smith',
-        ownerPhone: '+1234567890',
+        name: '',
+        ownerName: '',
+        ownerPhone: '',
     })
 
     // Real Call Workflow (replaces simulation)

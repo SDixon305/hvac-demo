@@ -9,11 +9,11 @@ import asyncio
 import os
 from datetime import datetime, date
 
-from database import db, Business, Technician, Call
+from database import db, Business, Technician, Call, DemoCall, supabase
 from ai_handler import EmergencyDetector, CallAnalyzer
 from sms_handler import SMSHandler, escalation_manager
 from report_generator import report_gen
-from config import FRONTEND_URL
+from config import FRONTEND_URL, BACKEND_URL
 from area_code_mapping import infer_region_from_phone
 
 app = FastAPI(title="HVAC Demo System API")
@@ -55,6 +55,58 @@ class TechnicianCreate(BaseModel):
     email: Optional[str] = None
     is_on_call: bool = False
     priority_order: int = 1
+
+
+# Helper function to get Vapi config
+def get_vapi_config(business_name: str) -> Dict[str, Any]:
+    """
+    Read Vapi config from JSON file and replace placeholders.
+    Also appends TRAINING_NOTES.md to the system prompt.
+    """
+    import json
+    import os
+    from pathlib import Path
+
+    # Try to find the config file
+    config_path = Path("docs/vapi/VAPI_ASSISTANT_FULL_CONFIG.json")
+    if not config_path.exists():
+        config_path = Path("../docs/vapi/VAPI_ASSISTANT_FULL_CONFIG.json")
+    
+    if not config_path.exists():
+        # Fallback to hardcoded default if file not found
+        return {
+            "firstMessage": f"{business_name}, how may I help you?",
+            "model": {
+                "provider": "openai",
+                "model": "gpt-4",
+                "temperature": 0.7,
+                "systemPrompt": f"You are a professional receptionist for {business_name}."
+            }
+        }
+
+    with open(config_path, "r") as f:
+        config_str = f.read()
+    
+    # Replace placeholders
+    config_str = config_str.replace("{{BUSINESS_NAME}}", business_name)
+    config_str = config_str.replace("{{SERVER_URL}}", BACKEND_URL)
+    
+    config = json.loads(config_str)
+
+    # Append training notes if they exist
+    training_notes_path = Path("docs/vapi/TRAINING_NOTES.md")
+    if not training_notes_path.exists():
+        training_notes_path = Path("../docs/vapi/TRAINING_NOTES.md")
+    
+    if training_notes_path.exists():
+        with open(training_notes_path, "r") as f:
+            training_notes = f.read().strip()
+        
+        if training_notes and "model" in config and "systemPrompt" in config["model"]:
+            config["model"]["systemPrompt"] += f"\n\nADDITIONAL TRAINING INSTRUCTIONS:\n{training_notes}"
+            print(f"✓ Appended training notes from {training_notes_path}")
+    
+    return config
 
 
 # Routes
@@ -127,6 +179,7 @@ async def handle_call_started(call_data: Dict[str, Any]):
     # In production, this would be determined by the phone number called
 
     business_id = "00000000-0000-0000-0000-000000000001"  # Demo business UUID
+    vapi_call_id = call_data.get('id')
 
     # Extract customer phone from call data
     customer_info = call_data.get('customer', {})
@@ -134,7 +187,7 @@ async def handle_call_started(call_data: Dict[str, Any]):
 
     call = Call(
         business_id=business_id,
-        vapi_call_id=call_data.get('id'),
+        vapi_call_id=vapi_call_id,
         customer_phone=customer_phone,
         status='in_progress',
         transcript=''
@@ -142,6 +195,62 @@ async def handle_call_started(call_data: Dict[str, Any]):
 
     result = db.create_call(call)
     print(f"📞 Call started - ID: {result.get('id')} from {customer_phone}")
+
+    # Update demo_calls for real-time monitoring
+    # Retry logic to find active demo call (handling race conditions)
+    active_demo_call = None
+    for i in range(3):
+        active_demo_call = db.get_active_demo_call()
+        if active_demo_call:
+            break
+        print(f"⚠️ No active demo call found, retrying ({i+1}/3)...")
+        await asyncio.sleep(1)
+
+    # Fallback: Check for any recent demo call created in the last 5 minutes
+    if not active_demo_call:
+        print("⚠️ Checking for recent demo calls as fallback...")
+        # We'll need to add a method to get recent demo calls regardless of status
+        # For now, we'll just try to get the most recent one created
+        try:
+            recent_calls = supabase.table('demo_calls')\
+                .select('*')\
+                .order('created_at', desc=True)\
+                .limit(1)\
+                .execute()
+            
+            if recent_calls.data:
+                potential_call = recent_calls.data[0]
+                # Check if it's recent (within 5 minutes)
+                created_at = datetime.fromisoformat(potential_call['created_at'].replace('Z', '+00:00'))
+                now = datetime.now(created_at.tzinfo)
+                if (now - created_at).total_seconds() < 300:
+                    active_demo_call = potential_call
+                    print(f"⚠️ Found recent demo call {active_demo_call['id']} as fallback")
+        except Exception as e:
+            print(f"Error checking recent calls: {e}")
+
+    if active_demo_call:
+        # Get business name from active session for greeting
+        session = supabase.table('demo_sessions')\
+            .select('business_name')\
+            .eq('id', active_demo_call['session_id'])\
+            .execute()
+        business_name = session.data[0]['business_name'] if session.data else 'HVAC Company'
+
+        # Store vapi_call_id in metadata (since the column doesn't exist)
+        current_metadata = active_demo_call.get('metadata', {}) or {}
+        current_metadata['vapi_call_id'] = vapi_call_id
+        
+        # Update status to connected
+        db.update_demo_call(active_demo_call['id'], {
+            'metadata': current_metadata,
+            'status': 'connected',
+            'transcript': f"AI: {business_name}, how may I help you?"
+        })
+        print(f"🔗 Linked VAPI call {vapi_call_id} to demo_call {active_demo_call['id']}")
+    else:
+        print(f"❌ Could not link VAPI call {vapi_call_id} to any demo session")
+
     return {"status": "call_created", "call_id": result.get('id')}
 
 
@@ -226,6 +335,17 @@ async def handle_call_ended(call_data: Dict[str, Any]):
     except Exception as e:
         print(f"❌ Error handling call-ended: {e}")
 
+    # Update demo_calls for real-time monitoring
+    try:
+        demo_call = db.get_demo_call_by_vapi_id(vapi_call_id)
+        if demo_call:
+            db.update_demo_call(demo_call['id'], {
+                'status': 'completed'
+            })
+            print(f"✅ Demo call {demo_call['id']} marked as completed")
+    except Exception as e:
+        print(f"Error updating demo_call on call-ended: {e}")
+
 
 async def handle_transcript_update(call_data: Dict[str, Any], message: Dict[str, Any]):
     """Handle real-time transcript updates"""
@@ -238,8 +358,11 @@ async def handle_transcript_update(call_data: Dict[str, Any], message: Dict[str,
     if not transcript_text:
         return {"status": "received"}
 
-    # Find the call by vapi_call_id
-    # We need to query Supabase to find the call
+    # Determine speaker label
+    speaker = "Customer" if role == "user" else "AI"
+    new_line = f"{speaker}: {transcript_text}"
+
+    # Update the calls table
     try:
         result = supabase.table('calls')\
             .select('*')\
@@ -249,20 +372,33 @@ async def handle_transcript_update(call_data: Dict[str, Any], message: Dict[str,
         if result.data and len(result.data) > 0:
             call_record = result.data[0]
             current_transcript = call_record.get('transcript', '')
+            updated_transcript = current_transcript + '\n' + new_line if current_transcript else new_line
 
-            # Append new transcript line
-            speaker = "Customer" if role == "user" else "Agent"
-            new_line = f"\n{speaker}: {transcript_text}"
-            updated_transcript = current_transcript + new_line
-
-            # Update the call record
             db.update_call(call_record['id'], {
                 'transcript': updated_transcript
             })
 
             print(f"📝 Transcript update: {speaker[:1]}: {transcript_text[:50]}...")
     except Exception as e:
-        print(f"Error updating transcript: {e}")
+        print(f"Error updating calls transcript: {e}")
+
+    # Update demo_calls for real-time monitoring
+    try:
+        demo_call = db.get_demo_call_by_vapi_id(vapi_call_id)
+        if demo_call:
+            current_transcript = demo_call.get('transcript', '')
+            updated_transcript = current_transcript + '\n' + new_line if current_transcript else new_line
+
+            # Set status based on who's speaking
+            new_status = 'listening' if role == 'user' else 'processing'
+
+            db.update_demo_call(demo_call['id'], {
+                'transcript': updated_transcript,
+                'status': new_status
+            })
+            print(f"🎙️ Demo call transcript updated - status: {new_status}")
+    except Exception as e:
+        print(f"Error updating demo_calls transcript: {e}")
 
     return {"status": "received"}
 
@@ -355,9 +491,16 @@ async def update_business(business_id: str, business: BusinessCreate):
         try:
             from config import VAPI_API_KEY, VAPI_ASSISTANT_ID
             import httpx
-
-            business_name = business.name
-
+            # Get config from helper
+            vapi_config = get_vapi_config(business_name)
+            
+            # Extract the parts we want to update
+            update_payload = {
+                "model": vapi_config["model"],
+                "firstMessage": vapi_config["firstMessage"],
+                "voice": vapi_config["voice"]
+            }
+            
             async with httpx.AsyncClient() as client:
                 vapi_response = await client.patch(
                     f"https://api.vapi.ai/assistant/{VAPI_ASSISTANT_ID}",
@@ -365,54 +508,14 @@ async def update_business(business_id: str, business: BusinessCreate):
                         "Content-Type": "application/json",
                         "Authorization": f"Bearer {VAPI_API_KEY}"
                     },
-                    json={
-                        "firstMessage": f"{business_name}, how may I help you?",
-                        "model": {
-                            "provider": "openai",
-                            "model": "gpt-4",
-                            "temperature": 0.7,
-                            "systemPrompt": f"""You are a professional receptionist for {business_name}, an HVAC company serving customers in South Florida. Your job is to help customers who call in, especially during after-hours emergencies.
-
-IMPORTANT CONTEXT:
-- Business Name: {business_name}
-- You have access to customer records via the lookup_customer tool
-- You can check technician availability in real-time
-- You can book appointments for routine service
-
-EMERGENCY DETECTION:
-If the customer mentions ANY of these, treat it as an emergency:
-- Heat wave, extreme heat, or temperatures over 95°F
-- Elderly person, senior citizen, or anyone over 80 years old
-- Health risk, medical condition, or safety concern
-- No AC/heating in extreme weather conditions
-- Words like "emergency", "urgent", "critical"
-- Young children or infants in uncomfortable conditions
-
-CALL FLOW:
-1. Greet: "{business_name}, how may I help you?"
-2. Listen carefully to their issue
-3. Ask: "Are you a current customer of ours?"
-4. If YES: Ask for their "first and last name please"
-5. Use the lookup_customer tool to get their information
-6. Confirm their address from the records
-7. If EMERGENCY detected: Use check_technician_availability tool immediately
-8. If tech available: Inform customer of dispatch and ETA
-9. If NOT emergency: Use book_appointment tool for scheduling
-10. Always ask for the best phone number for text confirmation
-11. Repeat the number back to confirm accuracy
-12. Provide a summary of what will happen next
-
-TONE: Professional, calm, reassuring, and friendly. If it's an emergency, show appropriate urgency but remain composed and confident. Make customers feel they're in good hands.
-
-REMEMBER: You speak FIRST when answering the phone. Don't wait for the customer to say hello."""
-                        }
-                    }
+                    json=update_payload
                 )
 
                 if vapi_response.status_code == 200:
                     print(f"✅ Synced VAPI assistant with updated business name: {business_name}")
                 else:
                     print(f"⚠️  Failed to sync VAPI assistant: {vapi_response.text}")
+                
         except Exception as e:
             print(f"⚠️  Error syncing VAPI assistant: {e}")
             # Don't fail the business update if VAPI sync fails
@@ -489,7 +592,6 @@ async def get_report(business_id: str, report_date: str):
 async def sms_webhook(request: Request):
     """Handle incoming SMS from technicians"""
     form_data = await request.form()
-    from_number = form_data.get('From')
     message_body = form_data.get('Body')
 
     # Parse response
@@ -502,6 +604,110 @@ async def sms_webhook(request: Request):
         pass
 
     return {"status": "received"}
+
+
+# Demo Call Monitoring Endpoints
+class StartMonitoringRequest(BaseModel):
+    """Request to start call monitoring"""
+    session_id: str
+
+
+@app.post("/api/demo/start-monitoring")
+async def start_demo_monitoring(request: StartMonitoringRequest):
+    """
+    Start monitoring for a demo call.
+    Creates a demo_call record that the frontend can subscribe to via Supabase real-time.
+    """
+    try:
+        session_id = request.session_id
+
+        # Verify session exists
+        session = supabase.table('demo_sessions')\
+            .select('*')\
+            .eq('id', session_id)\
+            .execute()
+
+        if not session.data:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Check if there's already an active demo call for this session
+        existing = db.get_demo_call_by_session(session_id)
+        if existing and existing.get('status') not in ['completed']:
+            # Return existing call
+            return {
+                "success": True,
+                "demo_call_id": existing['id'],
+                "status": existing['status'],
+                "message": "Resumed existing call monitoring"
+            }
+
+        # Create new demo call record
+        demo_call = DemoCall(
+            session_id=session_id,
+            status='connecting',
+            transcript='',
+            metadata={}
+        )
+
+        result = db.create_demo_call(demo_call)
+
+        if not result:
+            raise HTTPException(status_code=500, detail="Failed to create demo call")
+
+        print(f"📞 Demo call monitoring started - ID: {result['id']} for session: {session_id}")
+
+        return {
+            "success": True,
+            "demo_call_id": result['id'],
+            "status": "connecting",
+            "message": "Call monitoring started. Waiting for incoming call..."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error starting demo monitoring: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/demo/call-status")
+async def update_demo_call_status(request: Request):
+    """
+    Update demo call status (for testing/debugging)
+    """
+    try:
+        data = await request.json()
+        demo_call_id = data.get('demo_call_id')
+        status = data.get('status')
+        transcript_line = data.get('transcript_line')
+
+        if not demo_call_id:
+            raise HTTPException(status_code=400, detail="demo_call_id required")
+
+        updates = {}
+        if status:
+            updates['status'] = status
+
+        if transcript_line:
+            # Get current transcript and append
+            current = supabase.table('demo_calls')\
+                .select('transcript')\
+                .eq('id', demo_call_id)\
+                .execute()
+
+            current_transcript = current.data[0]['transcript'] if current.data else ''
+            updates['transcript'] = current_transcript + '\n' + transcript_line if current_transcript else transcript_line
+
+        if updates:
+            db.update_demo_call(demo_call_id, updates)
+
+        return {"success": True, "updates": updates}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error updating demo call status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # VAPI Tool Webhooks (called by AI during conversation)
@@ -836,42 +1042,17 @@ async def update_vapi_greeting(request: Request):
     try:
         from config import VAPI_API_KEY, VAPI_ASSISTANT_ID
         import httpx
-        import json
-        import re
 
         data = await request.json()
         business_name = data.get('business_name', 'HVAC Company')
 
         print(f"📝 Updating VAPI assistant with business name: {business_name}")
 
-        # Read the config template file
-        config_path = os.path.join(os.path.dirname(__file__), '..', 'n8n', 'FINAL', 'VAPI_ASSISTANT_FULL_CONFIG.json')
-
-        try:
-            with open(config_path, 'r') as f:
-                config_template = f.read()
-            print(f"✓ Loaded config template from {config_path}")
-        except FileNotFoundError:
-            print(f"⚠️ Config template not found at {config_path}, using inline config")
-            # Fallback to inline config if file not found
-            config_template = json.dumps({
-                "name": "{{BUSINESS_NAME}} Demo Agent",
-                "firstMessage": "Thank you for calling {{BUSINESS_NAME}}, how may I help you?",
-                "endCallMessage": "Thank you for calling {{BUSINESS_NAME}}. Have a great day!",
-                "model": {
-                    "provider": "openai",
-                    "model": "gpt-4",
-                    "temperature": 0.7,
-                    "systemPrompt": "You are the after-hours dispatcher for {{BUSINESS_NAME}}. Your job is to help customers with HVAC emergencies or schedule appointments."
-                }
-            })
-
-        # Replace all {{BUSINESS_NAME}} placeholders
-        config_str = config_template.replace('{{BUSINESS_NAME}}', business_name)
-        config = json.loads(config_str)
-
-        print(f"✓ Replaced placeholders with: {business_name}")
-        print(f"  - First Message: {config.get('firstMessage', 'N/A')}")
+        # Get config from helper
+        vapi_config = get_vapi_config(business_name)
+        
+        print(f"✓ Generated config for: {business_name}")
+        print(f"  - First Message: {vapi_config.get('firstMessage', 'N/A')}")
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.patch(
@@ -880,7 +1061,7 @@ async def update_vapi_greeting(request: Request):
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {VAPI_API_KEY}"
                 },
-                json=config
+                json=vapi_config
             )
 
             if response.status_code == 200:
@@ -916,6 +1097,9 @@ async def update_vapi_assistant(request: Request):
 
         business_name = business.get('name', 'our company')
 
+        # Get config from helper
+        vapi_config = get_vapi_config(business_name)
+
         # Update VAPI assistant with new configuration
         import httpx
         async with httpx.AsyncClient() as client:
@@ -926,53 +1110,8 @@ async def update_vapi_assistant(request: Request):
                     "Authorization": f"Bearer {VAPI_API_KEY}"
                 },
                 json={
-                    "firstMessage": f"{business_name}, how may I help you?",
-                    "model": {
-                        "provider": "openai",
-                        "model": "gpt-4",
-                        "temperature": 0.7,
-                        "systemPrompt": f"""You are a professional receptionist for {business_name}, an HVAC company.
-
-EXACT SCRIPT TO FOLLOW:
-
-When customer says they're an existing customer:
-1. You: "What's your first and last name?"
-2. Customer gives name (e.g., "Seth Dixon")
-3. You call lookup_customer tool
-4. After 2 seconds, you MUST say: "Perfect! I have you here at [ADDRESS from tool response]. Now, what's going on with your system?"
-
-CRITICAL RULES:
-- DO NOT say "let me look that up" or "one moment" or "hold on"
-- DO NOT announce you're using any tools
-- DO NOT go silent after calling lookup_customer
-- DO NOT ask customer to confirm their address
-- After receiving lookup_customer response, count to 2 in your head, then IMMEDIATELY speak the address
-- You must TELL them their address, not ASK them
-
-EXAMPLE OF CORRECT FLOW:
-Customer: "I'm an existing customer"
-You: "Great! What's your first and last name?"
-Customer: "John Smith"
-You: [call lookup_customer] "Perfect! I have you here at 456 Ocean Drive in West Palm Beach. Now, what's going on with your AC?"
-
-EXAMPLE OF WRONG FLOW (DO NOT DO THIS):
-Customer: "I'm an existing customer"
-You: "What's your name?"
-Customer: "John Smith"
-You: "Let me look that up" [WRONG - never say this]
-You: "Using lookup tool" [WRONG - never say this]
-You: [silence] [WRONG - never go silent]
-You: "Can you confirm your address?" [WRONG - you tell them, don't ask]
-
-EMERGENCY DETECTION:
-If customer mentions: heat wave, elderly person, extreme heat, health risk, emergency, urgent - treat as emergency.
-
-For emergencies: After getting address, say "That sounds urgent. I'm dispatching a technician right now." Then call check_technician_availability and give them technician name, ETA, and confirmation number.
-
-For routine service: Call book_appointment and confirm the appointment details.
-
-TONE: Professional, confident, efficient. Act like you have all their information instantly available."""
-                    }
+                    "firstMessage": vapi_config["firstMessage"],
+                    "model": vapi_config["model"]
                 }
             )
 
@@ -999,64 +1138,28 @@ async def vapi_config_webhook(request: Request):
         data = await request.json()
         print(f"VAPI config request: {data}")
 
-        # For demo, use the default business
-        # In production, you'd look up business by phone number
-        business_id = "00000000-0000-0000-0000-000000000001"
-        business = db.get_business(business_id)
+        # For demo, use the active session
+        # This ensures we get the business name the user just configured
+        active_session = db.get_active_demo_session()
+        
+        if active_session:
+            business_name = active_session.get('business_name', 'HVAC Company')
+            print(f"✓ Found active demo session for: {business_name}")
+        else:
+            # Fallback to default business if no active session
+            business_id = "00000000-0000-0000-0000-000000000001"
+            business = db.get_business(business_id)
+            business_name = business.get('name', 'our company') if business else 'HVAC Company'
+            print(f"⚠️ No active demo session, using fallback: {business_name}")
 
-        if not business:
-            # Fallback if no business found
-            return {
-                "assistant": {
-                    "firstMessage": "Hello, how may I help you?",
-                    "model": {
-                        "systemPrompt": "You are a helpful assistant."
-                    }
-                }
-            }
-
-        business_name = business.get('name', 'our company')
+        # Get config from helper
+        vapi_config = get_vapi_config(business_name)
 
         # Return dynamic configuration with business-specific greeting
         return {
             "assistant": {
-                "firstMessage": f"{business_name}, how may I help you?",
-                "model": {
-                    "systemPrompt": f"""You are a professional receptionist for {business_name}, an HVAC company serving customers in South Florida. Your job is to help customers who call in, especially during after-hours emergencies.
-
-IMPORTANT CONTEXT:
-- Business Name: {business_name}
-- You have access to customer records via the lookup_customer tool
-- You can check technician availability in real-time
-- You can book appointments for routine service
-
-EMERGENCY DETECTION:
-If the customer mentions ANY of these, treat it as an emergency:
-- Heat wave, extreme heat, or temperatures over 95°F
-- Elderly person, senior citizen, or anyone over 80 years old
-- Health risk, medical condition, or safety concern
-- No AC/heating in extreme weather conditions
-- Words like "emergency", "urgent", "critical"
-- Young children or infants in uncomfortable conditions
-
-CALL FLOW:
-1. Greet: "{business_name}, how may I help you?"
-2. Listen carefully to their issue
-3. Ask: "Are you a current customer of ours?"
-4. If YES: Ask for their "first and last name please"
-5. Use the lookup_customer tool to get their information
-6. Confirm their address from the records
-7. If EMERGENCY detected: Use check_technician_availability tool immediately
-8. If tech available: Inform customer of dispatch and ETA
-9. If NOT emergency: Use book_appointment tool for scheduling
-10. Always ask for the best phone number for text confirmation
-11. Repeat the number back to confirm accuracy
-12. Provide a summary of what will happen next
-
-TONE: Professional, calm, reassuring, and friendly. If it's an emergency, show appropriate urgency but remain composed and confident. Make customers feel they're in good hands.
-
-REMEMBER: You speak FIRST when answering the phone. Don't wait for the customer to say hello."""
-                }
+                "firstMessage": vapi_config["firstMessage"],
+                "model": vapi_config["model"]
             }
         }
 

@@ -79,6 +79,18 @@ class DailyReport(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class DemoCall(BaseModel):
+    """Demo call for real-time monitoring"""
+    id: Optional[str] = None
+    session_id: str
+    vapi_call_id: Optional[str] = None
+    status: str = 'connecting'  # 'connecting', 'connected', 'listening', 'processing', 'completed'
+    transcript: str = ''
+    metadata: Optional[Dict[str, Any]] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
 # Database Operations
 class DatabaseOperations:
     """Helper class for database operations"""
@@ -187,6 +199,62 @@ class DatabaseOperations:
             .select('*')\
             .eq('business_id', business_id)\
             .eq('report_date', report_date)\
+            .execute()
+        return result.data[0] if result.data else None
+
+    # Demo Call Operations
+    @staticmethod
+    def create_demo_call(demo_call: 'DemoCall') -> Dict[str, Any]:
+        """Create a new demo call record for real-time monitoring"""
+        data = demo_call.model_dump(exclude={'id', 'created_at', 'updated_at'}, exclude_none=True)
+        result = supabase.table('demo_calls').insert(data).execute()
+        return result.data[0] if result.data else None
+
+    @staticmethod
+    def update_demo_call(demo_call_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a demo call record"""
+        result = supabase.table('demo_calls').update(updates).eq('id', demo_call_id).execute()
+        return result.data[0] if result.data else None
+
+    @staticmethod
+    def get_demo_call_by_session(session_id: str) -> Optional[Dict[str, Any]]:
+        """Get the most recent demo call for a session"""
+        result = supabase.table('demo_calls')\
+            .select('*')\
+            .eq('session_id', session_id)\
+            .order('created_at', desc=True)\
+            .limit(1)\
+            .execute()
+        return result.data[0] if result.data else None
+
+    @staticmethod
+    def get_demo_call_by_vapi_id(vapi_call_id: str) -> Optional[Dict[str, Any]]:
+        """Get demo call by VAPI call ID (stored in metadata->vapi_call_id)"""
+        result = supabase.table('demo_calls')\
+            .select('*')\
+            .eq('metadata->>vapi_call_id', vapi_call_id)\
+            .execute()
+        return result.data[0] if result.data else None
+
+    @staticmethod
+    def get_active_demo_session() -> Optional[Dict[str, Any]]:
+        """Get the currently active demo session"""
+        result = supabase.table('demo_sessions')\
+            .select('*')\
+            .eq('is_active', True)\
+            .order('created_at', desc=True)\
+            .limit(1)\
+            .execute()
+        return result.data[0] if result.data else None
+
+    @staticmethod
+    def get_active_demo_call() -> Optional[Dict[str, Any]]:
+        """Get the most recent active (non-completed) demo call"""
+        result = supabase.table('demo_calls')\
+            .select('*')\
+            .neq('status', 'completed')\
+            .order('created_at', desc=True)\
+            .limit(1)\
             .execute()
         return result.data[0] if result.data else None
 

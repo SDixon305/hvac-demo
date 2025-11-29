@@ -83,33 +83,6 @@ CREATE INDEX IF NOT EXISTS idx_technicians_on_call ON technicians(is_on_call) WH
 CREATE INDEX IF NOT EXISTS idx_notifications_call_id ON notifications(call_id);
 CREATE INDEX IF NOT EXISTS idx_daily_reports_business_date ON daily_reports(business_id, report_date);
 
--- Insert demo business (Bob's HVAC)
--- First, create a variable to store the business ID
-DO $$
-DECLARE
-  demo_business_uuid UUID := '00000000-0000-0000-0000-000000000001';
-BEGIN
-  -- Insert demo business
-  INSERT INTO businesses (id, name, phone_number, region, hours_start, hours_end, owner_name, owner_phone)
-  VALUES (
-    demo_business_uuid,
-    'Bob''s HVAC',
-    '+15614314060',
-    'south',
-    '08:00:00',
-    '17:00:00',
-    'Bob Smith',
-    '+15614314060'
-  ) ON CONFLICT (id) DO NOTHING;
-
-  -- Insert demo technician
-  INSERT INTO technicians (business_id, name, phone_number, email, is_on_call, priority_order)
-  VALUES (
-    demo_business_uuid,
-    'John Technician',
-    '+15614314060',
-    'john@bobshvac.com',
-    true,
-    1
-  ) ON CONFLICT DO NOTHING;
-END $$;
+-- NOTE: No hardcoded demo business data
+-- Business names are entered dynamically by users through the demo interface
+-- The demo_sessions table (see migrations/create_demo_sessions.sql) stores user-configured businesses

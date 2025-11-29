@@ -18,6 +18,7 @@ Add your feedback and corrections here. Each time you update the assistant confi
 - For emergencies, always confirm someone will be home and repeat the ETA.
 - For non-emergencies, always schedule the first available appointment for tomorrow and confirm the time window.
 - Ask if I'm an existing customer before looking up their name.
+- When you're looking something up for a caller, take a couple of seconds to pretend to be looking before responding. 
 
 ---
 
@@ -72,13 +73,12 @@ Add your feedback and corrections here. Each time you update the assistant confi
 - **Emergency Handling:**
   - Place the caller on a brief fake hold.
   - Always return with: “I reached Trevor, our on-call technician.”
-  - Confirm address.
   - Confirm that someone will be home.
   - Provide the 30–60 minute ETA.
 - **Non-Emergency Handling:**
-  - Offer only next-day scheduling.
-  - Provide a choice between tomorrow morning or afternoon.
-  - Confirm time and phone number.
+  - Offer next-day scheduling. After hours service calls are just for emergencies.
+  - Provide a choice between tomorrow morning or afternoon. Once the caller has selected either morning or afternoon, offer two time slots within the selected time window.
+  - Request caller's phone number to send text confirmation.
   - Tell them a confirmation text will be sent.
 - **Tone & Style:** Always sound like a dispatcher — composed, confident, efficient.
 - **Never Upsell:** Only triage emergencies and schedule next-day service. No sales, no promotions.
@@ -90,6 +90,41 @@ Add your feedback and corrections here. Each time you update the assistant confi
 1. Add your notes above in the appropriate section.
 2. Run the update script to regenerate the assistant config:
 
-   `./n8n/FINAL/update-agent.sh`
+   `./docs/vapi/update-agent.sh`
 
 3. The agent will incorporate these behaviors.
+
+---
+
+## Dynamic Business Name Implementation
+
+**IMPORTANT:** The business name is FULLY DYNAMIC. There are NO hardcoded business names.
+
+### How It Works:
+
+1. **User enters their business name** in the frontend form (BusinessSetup component)
+2. **Frontend saves to Supabase** `demo_sessions` table with `business_name`, `owner_name`, `owner_phone`, and `region`
+3. **Frontend calls backend** `/api/update-vapi-greeting` with the business name
+4. **Backend reads** `VAPI_ASSISTANT_FULL_CONFIG.json` which contains `{{BUSINESS_NAME}}` placeholders
+5. **Backend replaces** all `{{BUSINESS_NAME}}` placeholders with the user's actual business name
+6. **Backend PATCHes** the VAPI assistant directly via the VAPI API
+7. **VAPI agent now greets callers** with the user's business name
+
+### Key Files:
+
+- `frontend/components/BusinessSetup.tsx` - Collects business name and triggers update
+- `backend/main.py` `/api/update-vapi-greeting` endpoint - Processes and sends to VAPI
+- `docs/vapi/VAPI_ASSISTANT_FULL_CONFIG.json` - Template with `{{BUSINESS_NAME}}` placeholders
+- `backend/migrations/create_demo_sessions.sql` - Database table for storing sessions
+
+### Environment Variables:
+
+- `NEXT_PUBLIC_BACKEND_URL` - Backend URL (defaults to `http://localhost:8000`)
+- `VAPI_API_KEY` - VAPI API key (in backend config.py)
+- `VAPI_ASSISTANT_ID` - VAPI assistant ID to update (in backend config.py)
+
+### DO NOT:
+
+- Add hardcoded business names anywhere
+- Use fallback defaults like "Diamond Cooling" or "Bob's HVAC"
+- Skip the VAPI update step when configuring a business

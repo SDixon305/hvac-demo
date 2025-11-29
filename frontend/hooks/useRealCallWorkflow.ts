@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { CallStatus } from '@/components/LiveCallStatus';
 import { inferRegionFromPhone } from '@/utils/areaCodeMapping';
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
 interface BusinessData {
     name: string;
@@ -15,7 +17,8 @@ export function useRealCallWorkflow(businessData: BusinessData) {
     const [callStatus, setCallStatus] = useState<CallStatus>('idle');
     const [transcript, setTranscript] = useState<string[]>([]);
     const [sessionId, setSessionId] = useState<string | null>(null);
-    const [callId, setCallId] = useState<string | null>(null);
+    const [demoCallId, setDemoCallId] = useState<string | null>(null);
+    const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
     // Initialize session when business is configured
     const initializeSession = useCallback(async () => {
@@ -45,70 +48,125 @@ export function useRealCallWorkflow(businessData: BusinessData) {
 
     // Start monitoring for calls
     const startCallMonitoring = useCallback(async () => {
-        if (!sessionId) {
-            const newSessionId = await initializeSession();
-            if (!newSessionId) return;
+        let currentSessionId = sessionId;
+
+        if (!currentSessionId) {
+            currentSessionId = await initializeSession();
+            if (!currentSessionId) {
+                console.error('Failed to initialize session');
+                return;
+            }
         }
 
         setCallStatus('connecting');
         setTranscript([]);
+
+        // Call backend to create demo_call record
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/demo/start-monitoring`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ session_id: currentSessionId }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to start monitoring');
+            }
+
+            const result = await response.json();
+            console.log('Started monitoring:', result);
+            setDemoCallId(result.demo_call_id);
+
+        } catch (error) {
+            console.error('Error starting call monitoring:', error);
+            setCallStatus('idle');
+        }
     }, [sessionId, initializeSession]);
 
-    // Subscribe to call updates
+    // Subscribe to demo_calls updates
     useEffect(() => {
-        if (callStatus === 'idle') return;
+        if (callStatus === 'idle' || !sessionId) return;
+
+        // Clean up existing channel
+        if (channelRef.current) {
+            supabase.removeChannel(channelRef.current);
+        }
+
+        console.log('Setting up Supabase real-time subscription for session:', sessionId);
 
         const channel = supabase
-            .channel('demo_calls_realtime')
+            .channel(`demo_calls_${sessionId}`)
             .on(
                 'postgres_changes',
                 {
                     event: '*',
                     schema: 'public',
                     table: 'demo_calls',
-                    filter: sessionId ? `session_id=eq.${sessionId}` : undefined
+                    filter: `session_id=eq.${sessionId}`
                 },
                 (payload) => {
+                    console.log('Received real-time update:', payload);
                     const call = payload.new as any;
 
+                    if (!call) return;
+
+                    // Update demo call ID if this is a new record
                     if (payload.eventType === 'INSERT') {
-                        setCallId(call.id);
-                        setCallStatus('connected');
-                        setTranscript([`AI: ${businessData.name}, how may I help you?`]);
+                        setDemoCallId(call.id);
                     }
 
-                    if (payload.eventType === 'UPDATE' && call.id === callId) {
-                        // Update transcript
-                        if (call.transcript) {
-                            const lines = call.transcript.split('\n').filter(Boolean);
-                            setTranscript(lines);
-                        }
+                    // Update status from the call record
+                    if (call.status) {
+                        const statusMap: Record<string, CallStatus> = {
+                            'connecting': 'connecting',
+                            'connected': 'connected',
+                            'listening': 'listening',
+                            'processing': 'processing',
+                            'completed': 'completed'
+                        };
+                        const newStatus = statusMap[call.status] || call.status;
+                        setCallStatus(newStatus as CallStatus);
+                    }
 
-                        // Update status based on call metadata
-                        if (call.metadata?.detecting_emergency) {
-                            setCallStatus('processing');
-                        } else if (call.metadata?.listening) {
-                            setCallStatus('listening');
-                        }
-
-                        // Handle completion
-                        if (call.status === 'completed') {
-                            setCallStatus('completed');
-                        }
+                    // Update transcript
+                    if (call.transcript) {
+                        const lines = call.transcript
+                            .split('\n')
+                            .filter((line: string) => line.trim() !== '');
+                        setTranscript(lines);
                     }
                 }
             )
-            .subscribe();
+            .subscribe((status) => {
+                console.log('Supabase subscription status:', status);
+            });
+
+        channelRef.current = channel;
 
         return () => {
-            supabase.removeChannel(channel);
+            if (channelRef.current) {
+                console.log('Cleaning up Supabase subscription');
+                supabase.removeChannel(channelRef.current);
+                channelRef.current = null;
+            }
         };
-    }, [callStatus, sessionId, callId, businessData.name]);
+    }, [callStatus, sessionId]);
+
+    // Reset function for starting a new call
+    const resetCall = useCallback(() => {
+        setCallStatus('idle');
+        setTranscript([]);
+        setDemoCallId(null);
+    }, []);
 
     return {
         callStatus,
         transcript,
         startCallMonitoring,
-        sessionId
+        resetCall,
+        sessionId,
+        demoCallId
     };
 }
