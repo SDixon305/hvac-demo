@@ -41,7 +41,7 @@ if (menuToggle && nav) {
 const playBtn = document.querySelector('.play-btn');
 const visualizer = document.querySelector('.demo-visualizer');
 const transcriptContainer = document.getElementById('transcript-container');
-let audio = new Audio('/audio/demo_call.wav');
+let audio = new Audio(import.meta.env.BASE_URL + 'audio/demo_call.wav');
 
 // Transcript Data
 const transcriptData = [
