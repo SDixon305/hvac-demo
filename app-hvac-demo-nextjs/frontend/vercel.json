@@ -8,6 +8,10 @@
     {
       "source": "/hvac-owners/:path*",
       "destination": "/:path*"
+    },
+    {
+      "source": "/hvac",
+      "destination": "/hvac-static/index.html"
     }
   ]
 }
