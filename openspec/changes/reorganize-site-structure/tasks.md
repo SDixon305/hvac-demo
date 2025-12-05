@@ -28,8 +28,8 @@
 
 ## 6. Configure Vercel
 - [x] 6.1 Create unified `site/vercel.json` with rewrites for all routes
-- [ ] 6.2 Update Vercel project settings to deploy from `site/` directory
-- [ ] 6.3 Configure build settings for Next.js app at `/hvac/app/frontend`
+- [x] 6.2 Update Vercel project settings to deploy from `site/` directory
+- [x] 6.3 Configure build settings for Next.js app at `/hvac/app/frontend`
 
 ## 7. Update Registry and Documentation
 - [x] 7.1 Populate `site/pages.json` with home and hvac entries
@@ -37,11 +37,11 @@
 - [x] 7.3 Update root `README.md` to reflect new structure
 
 ## 8. Validation
-- [ ] 8.1 Test local preview of home page
-- [ ] 8.2 Test local preview of HVAC landing page
-- [ ] 8.3 Test Next.js dev server for dashboard
-- [ ] 8.4 Deploy to Vercel preview and verify all routes work
-- [ ] 8.5 Remove old directories only after successful deployment
+- [x] 8.1 Test local preview of home page
+- [x] 8.2 Test local preview of HVAC landing page
+- [x] 8.3 Test Next.js dev server for dashboard
+- [x] 8.4 Deploy to Vercel preview and verify all routes work
+- [x] 8.5 Remove old directories only after successful deployment
 
 ## Dependencies
 - Task 2 depends on Task 1 completion

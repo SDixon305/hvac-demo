@@ -2,6 +2,14 @@
 
 AI-powered business automation solutions.
 
+## Live URLs
+
+| URL | Description |
+|-----|-------------|
+| https://solidframe.ai | Main landing page |
+| https://solidframe.ai/hvac | HVAC AI Dispatcher landing page |
+| https://hvac-demo.solidframe.ai | HVAC demo dashboard (Next.js app) |
+
 ## Site Structure
 
 The `site/` folder contains the solidframe.ai website. Each subfolder maps to a URL route:
@@ -10,9 +18,19 @@ The `site/` folder contains the solidframe.ai website. Each subfolder maps to a 
 |-------|--------|-------------|
 | `/` | `site/home/` | Main landing page |
 | `/hvac` | `site/hvac/` | HVAC AI Dispatcher landing page |
-| `/hvac/dashboard` | `site/hvac/app/` | HVAC demo application |
+
+The HVAC demo app is deployed separately at `hvac-demo.solidframe.ai`.
 
 See `site/pages.json` for the complete page registry.
+
+## Deployment
+
+Two Vercel projects deploy from this repo:
+
+| Project | Root Directory | Domain |
+|---------|----------------|--------|
+| `solidframe` | `site/` | solidframe.ai |
+| `hvac-demo-app` | `site/hvac/app/frontend/` | hvac-demo.solidframe.ai |
 
 ## Adding a New Landing Page
 
